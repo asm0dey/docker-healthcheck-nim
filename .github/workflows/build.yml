@@ -12,69 +12,83 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        arch: [x64, arm64]
+        arch: [amd64, arm64]
         include:
           - os: ubuntu-latest
             platform: linux
-            arch_name: x86_64
+            nim_arch: amd64
+            display_arch: x86_64
             ext: ""
           - os: ubuntu-latest
             arch: arm64
             platform: linux
-            arch_name: aarch64
+            nim_arch: arm64
+            display_arch: aarch64
             ext: ""
+            cross_compile: true
           - os: macos-latest
             platform: macosx
-            arch_name: x86_64
+            nim_arch: amd64
+            display_arch: x86_64
             ext: ""
           - os: macos-latest
             arch: arm64
             platform: macosx
-            arch_name: arm64
+            nim_arch: arm64
+            display_arch: arm64
             ext: ""
           - os: windows-latest
             platform: windows
-            arch_name: x86_64
+            nim_arch: amd64
+            display_arch: x86_64
             ext: ".exe"
           - os: windows-latest
             arch: arm64
             platform: windows
-            arch_name: aarch64
+            nim_arch: arm64
+            display_arch: aarch64
             ext: ".exe"
-        exclude:
-          # Exclude arm64 on windows-latest if not supported by your project
-          # - os: windows-latest
-          #   arch: arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Nim
-        uses: jiro4989/setup-nim@v1
+        uses: jiro4989/setup-nim-action@v2
         with:
-          nim-version: '2.2.2' # Specify your desired Nim version
+          nim-version: '2.2.2'
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install dependencies (Linux - amd64)
+        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc
+
+      - name: Install cross-compiler (Linux - arm64)
+        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew install gcc
 
-      - name: Build the project
+      - name: Build the project (native)
+        if: matrix.arch != 'arm64' || matrix.os != 'ubuntu-latest'
         run: |
-          # Replace 'urlchecker.nim' with your actual Nim script filename
-          nim c -d:ssl -d:release --cpu:${{ matrix.arch_name }} --os:${{ matrix.platform }} --out:bin/urlchecker${{ matrix.ext }} urlchecker.nim
+          nim c -d:ssl -d:release --cpu:${{ matrix.nim_arch }} --os:${{ matrix.platform }} --out:bin/urlchecker-${{ matrix.platform }}-${{ matrix.display_arch }}${{ matrix.ext }} urlchecker.nim
+
+      - name: Build the project (Linux ARM64 cross-compile)
+        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'arm64'
+        run: |
+          nim c -d:ssl -d:release --cpu:${{ matrix.nim_arch }} --os:${{ matrix.platform }} --gcc.exe:aarch64-linux-gnu-gcc --gcc.linkerexe:aarch64-linux-gnu-gcc --out:bin/urlchecker-${{ matrix.platform }}-${{ matrix.display_arch }}${{ matrix.ext }} urlchecker.nim
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: urlchecker-${{ matrix.platform }}-${{ matrix.arch_name }}${{ matrix.ext }}
-          path: bin/urlchecker${{ matrix.ext }}
+          name: urlchecker-${{ matrix.platform }}-${{ matrix.display_arch }}${{ matrix.ext }}
+          path: bin/urlchecker-${{ matrix.platform }}-${{ matrix.display_arch }}${{ matrix.ext }}
 
   release:
     name: Create Release
