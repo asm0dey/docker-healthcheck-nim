@@ -1,0 +1,104 @@
+name: Build and Release Nim Script
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags (e.g., v1.0.0)
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        arch: [x64, arm64]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch_name: x86_64
+            ext: ""
+          - os: ubuntu-latest
+            arch: arm64
+            platform: linux
+            arch_name: aarch64
+            ext: ""
+          - os: macos-latest
+            platform: macosx
+            arch_name: x86_64
+            ext: ""
+          - os: macos-latest
+            arch: arm64
+            platform: macosx
+            arch_name: arm64
+            ext: ""
+          - os: windows-latest
+            platform: windows
+            arch_name: x86_64
+            ext: ".exe"
+          - os: windows-latest
+            arch: arm64
+            platform: windows
+            arch_name: aarch64
+            ext: ".exe"
+        exclude:
+          # Exclude arm64 on windows-latest if not supported by your project
+          # - os: windows-latest
+          #   arch: arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Nim
+        uses: jiro4989/setup-nim@v1
+        with:
+          nim-version: '2.2.2' # Specify your desired Nim version
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gcc
+
+      - name: Build the project
+        run: |
+          # Replace 'urlchecker.nim' with your actual Nim script filename
+          nim c -d:ssl -d:release --cpu:${{ matrix.arch_name }} --os:${{ matrix.platform }} --out:bin/urlchecker${{ matrix.ext }} urlchecker.nim
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urlchecker-${{ matrix.platform }}-${{ matrix.arch_name }}${{ matrix.ext }}
+          path: bin/urlchecker${{ matrix.ext }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/urlchecker-linux-x86_64
+            artifacts/urlchecker-linux-aarch64
+            artifacts/urlchecker-macosx-x86_64
+            artifacts/urlchecker-macosx-arm64
+            artifacts/urlchecker-windows-x86_64.exe
+            artifacts/urlchecker-windows-aarch64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
