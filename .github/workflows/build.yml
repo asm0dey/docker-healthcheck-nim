@@ -41,16 +41,12 @@ jobs:
             platform: windows
             arch_name: aarch64
             ext: ".exe"
-        exclude:
-          # Exclude arm64 on windows-latest if not supported by your project
-          # - os: windows-latest
-          #   arch: arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Nim
-        uses: jiro4989/setup-nim@v1
+        uses: jiro4989/setup-nim-action@v2
         with:
           nim-version: '2.2.2' # Specify your desired Nim version
 
